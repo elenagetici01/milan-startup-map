@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Startup Map — Milan Startup Hub</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --ink:    #0f0f1a;
+      --paper:  #f5f1e8;
+      --accent: #c9a84c;
+      --green:  #2e7d54;
+      --danger: #b5451b;
+      --muted:  #6b6b7a;
+      --border: rgba(15,15,26,.13);
+      --nav-h:  56px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%; overflow: hidden;
+      font-family: 'DM Mono', monospace;
+      background: var(--ink); color: var(--ink);
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 2000;
+      background: var(--ink); border-bottom: 2px solid var(--accent);
+      display: flex; align-items: center;
+      padding: 0 24px; height: var(--nav-h); gap: 0;
+    }
+    .nav-brand {
+      font-family: 'Playfair Display', serif; font-size: 1rem;
+      color: var(--accent); letter-spacing: .04em; text-decoration: none;
+      margin-right: auto;
+    }
+    .nav-links { display: flex; }
+    .nav-link {
+      display: flex; align-items: center; height: var(--nav-h);
+      padding: 0 20px; font-family: 'DM Mono', monospace;
+      font-size: .62rem; letter-spacing: .13em; text-transform: uppercase;
+      color: rgba(245,241,232,.45); text-decoration: none;
+      border-left: 1px solid rgba(245,241,232,.07);
+      transition: color .18s; position: relative;
+    }
+    .nav-link::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: var(--accent); transform: scaleX(0); transition: transform .2s;
+    }
+    .nav-link:hover { color: var(--paper); }
+    .nav-link:hover::after, .nav-link.active::after { transform: scaleX(1); }
+    .nav-link.active { color: var(--accent); }
+    #geo-pill {
+      font-size: .58rem; letter-spacing: .09em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 20px; border: 1px solid transparent;
+      margin-left: 14px; transition: all .3s;
+    }
+    #geo-pill.loading { border-color: var(--accent); color: var(--accent); }
+    #geo-pill.done    { border-color: #4caf7d; color: #4caf7d; }
+    #geo-pill.error   { border-color: var(--danger); color: var(--danger); }
+
+    /* ── APP SHELL ── */
+    .app {
+      display: flex; position: fixed;
+      top: var(--nav-h); left: 0; right: 0; bottom: 0;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 308px; flex-shrink: 0;
+      background: var(--paper);
+      border-right: 2px solid var(--ink);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* layer section */
+    .sb-section { padding: 11px 15px; border-bottom: 1px solid var(--border); }
+    .sb-section h2 {
+      font-family: 'Playfair Display', serif; font-size: .8rem;
+      margin-bottom: 9px; letter-spacing: .03em;
+    }
+    .layer-btns { display: flex; gap: 5px; }
+    .layer-btn {
+      flex: 1; padding: 6px 4px;
+      font-family: 'DM Mono', monospace; font-size: .59rem;
+      letter-spacing: .08em; text-transform: uppercase;
+      border: 1.5px solid var(--ink); background: transparent;
+      cursor: pointer; transition: all .14s; border-radius: 2px;
+      color: var(--ink);
+    }
+    .layer-btn.active { background: var(--ink); color: var(--paper); }
+    .layer-btn:hover:not(.active) { background: var(--ink); color: var(--paper); opacity: .6; }
+
+    /* upload section */
+    .upload-section { padding: 11px 15px; border-bottom: 1px solid var(--border); }
+    .upload-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .upload-section-header h2 {
+      font-family: 'Playfair Display', serif; font-size: .8rem; letter-spacing: .03em;
+    }
+    .upload-count {
+      font-size: .58rem; opacity: .4; letter-spacing: .08em; text-transform: uppercase;
+    }
+
+    /* collapse toggle */
+    .collapse-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: .75rem; opacity: .4; transition: opacity .15s; padding: 2px 4px;
+    }
+    .collapse-btn:hover { opacity: .9; }
+
+    .upload-panel { overflow: hidden; transition: max-height .3s ease; max-height: 200px; }
+    .upload-panel.collapsed { max-height: 0; }
+
+    /* excel drop zone */
+    .excel-zone {
+      border: 1.5px dashed var(--border); border-radius: 3px;
+      padding: 12px 10px; text-align: center; cursor: pointer;
+      transition: all .15s; position: relative; background: #faf7f0;
+    }
+    .excel-zone:hover, .excel-zone.drag { border-color: var(--ink); background: rgba(15,15,26,.04); }
+    .excel-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .excel-zone .ez-icon { font-size: 1.3rem; margin-bottom: 3px; }
+    .excel-zone .ez-text  { font-size: .59rem; letter-spacing: .07em; text-transform: uppercase; opacity: .45; line-height: 1.5; }
+    .excel-zone .ez-hint  { font-size: .55rem; opacity: .3; margin-top: 3px; letter-spacing: .05em; }
+
+    /* merge result badge */
+    .merge-result {
+      margin-top: 7px; padding: 6px 10px; border-radius: 2px;
+      font-size: .6rem; letter-spacing: .07em; text-transform: uppercase;
+      display: none; line-height: 1.6;
+    }
+    .merge-result.show { display: block; }
+    .merge-result.info { background: rgba(46,125,84,.1); color: #1a5c35; border: 1px solid rgba(46,125,84,.3); }
+    .merge-result.warn { background: rgba(181,69,27,.08); color: var(--danger); border: 1px solid rgba(181,69,27,.25); }
+
+    /* startups header */
+    .startups-header {
+      padding: 11px 15px 7px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .startups-header h2 {
+      font-family: 'Playfair Display', serif; font-size: .8rem; letter-spacing: .03em;
+    }
+    #pin-count { font-size: .68rem; opacity: .35; letter-spacing: .06em; }
+    .startups-hint {
+      font-size: .56rem; letter-spacing: .08em; text-transform: uppercase;
+      opacity: .35; margin-top: 1px; padding: 0 15px 7px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* pin list */
+    .pins-list { flex: 1; overflow-y: auto; }
+    .pins-list::-webkit-scrollbar { width: 4px; }
+    .pins-list::-webkit-scrollbar-thumb { background: rgba(15,15,26,.15); border-radius: 2px; }
+
+    .pin-item {
+      padding: 9px 15px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background .12s;
+      display: flex; align-items: center; gap: 9px;
+    }
+    .pin-item:hover { background: rgba(201,168,76,.09); }
+    .pin-item.selected { background: rgba(201,168,76,.16); }
+
+    .pin-logo-thumb {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 2px solid var(--ink); flex-shrink: 0;
+      background: #e8e3d8; display: flex; align-items: center;
+      justify-content: center; font-size: .7rem; overflow: hidden;
+    }
+    .pin-logo-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+    .pin-info { flex: 1; min-width: 0; }
+    .pin-name { font-size: .7rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pin-addr { font-size: .57rem; opacity: .4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+    .badge {
+      font-size: .5rem; letter-spacing: .06em; text-transform: uppercase;
+      padding: 2px 5px; border-radius: 2px; flex-shrink: 0; white-space: nowrap;
+    }
+    .badge-ok   { background: rgba(76,175,125,.12); color: #1e6b40; border: 1px solid #4caf7d; }
+    .badge-fail { background: rgba(181,69,27,.1);   color: var(--danger); border: 1px solid var(--danger); }
+    .badge-wait { background: rgba(201,168,76,.15); color: #7a5c00; border: 1px solid var(--accent); }
+
+    .edit-btn {
+      background: none; border: 1.5px solid var(--ink); color: var(--ink);
+      font-family: 'DM Mono', monospace; font-size: .56rem;
+      letter-spacing: .07em; text-transform: uppercase;
+      padding: 3px 6px; border-radius: 2px; cursor: pointer;
+      transition: all .14s; flex-shrink: 0;
+    }
+    .edit-btn:hover { background: var(--ink); color: var(--paper); }
+
+    /* ── MAP ── */
+    #map { flex: 1; }
+
+    /* ── EDIT MODAL ── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,15,26,.6); backdrop-filter: blur(4px);
+      z-index: 3000; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--paper); border: 2px solid var(--ink);
+      border-radius: 4px; width: 430px; max-width: 95vw;
+      box-shadow: 8px 8px 0 rgba(15,15,26,.28);
+      transform: translateY(14px); transition: transform .2s;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .overlay.open .modal { transform: translateY(0); }
+
+    .modal-hdr {
+      padding: 13px 17px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; position: sticky; top: 0;
+      background: var(--paper); z-index: 1;
+    }
+    .modal-hdr h3 { font-family: 'Playfair Display', serif; font-size: .95rem; flex: 1; }
+    .modal-x {
+      background: none; border: none; font-size: 1rem;
+      cursor: pointer; opacity: .4; transition: opacity .14s;
+    }
+    .modal-x:hover { opacity: 1; }
+    .modal-body { padding: 15px 17px; display: flex; flex-direction: column; gap: 13px; }
+
+    .logo-row { display: flex; align-items: center; gap: 13px; }
+    .logo-big {
+      width: 58px; height: 58px; border-radius: 50%;
+      border: 2px solid var(--ink); flex-shrink: 0;
+      background: #e8e3d8; display: flex; align-items: center;
+      justify-content: center; font-size: 1.3rem; overflow: hidden;
+      position: relative;
+    }
+    .logo-big img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; border-radius: 50%; display: none;
+    }
+    .logo-big .rm-logo {
+      position: absolute; top: -3px; right: -3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--danger); color: #fff; border: none;
+      font-size: .55rem; cursor: pointer; display: none;
+      align-items: center; justify-content: center;
+    }
+    .logo-nm { flex: 1; }
+    .logo-nm strong { font-family: 'Playfair Display', serif; font-size: .95rem; display: block; }
+    .logo-nm small  { font-size: .6rem; opacity: .4; display: block; margin-top: 2px; }
+
+    .field-label {
+      font-size: .58rem; letter-spacing: .1em; text-transform: uppercase;
+      opacity: .5; display: block; margin-bottom: 4px;
+    }
+    input[type=text], input[type=url], textarea {
+      width: 100%; padding: 7px 9px;
+      font-family: 'DM Mono', monospace; font-size: .68rem;
+      border: 1.5px solid var(--border); background: #faf7f0;
+      border-radius: 2px; outline: none; color: var(--ink);
+      transition: border-color .14s;
+    }
+    input:focus, textarea:focus { border-color: var(--ink); }
+    textarea { resize: vertical; min-height: 52px; }
+
+    .or-div {
+      display: flex; align-items: center; gap: 8px;
+      font-size: .58rem; opacity: .3; letter-spacing: .1em; text-transform: uppercase;
+    }
+    .or-div::before, .or-div::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    .file-zone {
+      border: 2px dashed var(--border); border-radius: 3px;
+      padding: 14px; text-align: center; cursor: pointer;
+      transition: all .14s; position: relative;
+    }
+    .file-zone:hover, .file-zone.drag { border-color: var(--ink); background: rgba(15,15,26,.03); }
+    .file-zone input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .file-zone .fz-icon { font-size: 1.4rem; margin-bottom: 4px; }
+    .file-zone .fz-txt  { font-size: .59rem; letter-spacing: .08em; text-transform: uppercase; opacity: .45; }
+
+    .modal-ftr {
+      padding: 11px 17px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; justify-content: flex-end;
+      position: sticky; bottom: 0; background: var(--paper);
+    }
+    .btn-ghost {
+      padding: 7px 13px; background: transparent; color: var(--ink);
+      border: 1.5px solid var(--border); font-family: 'DM Mono', monospace;
+      font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+      border-radius: 2px; cursor: pointer; transition: border-color .14s;
+    }
+    .btn-ghost:hover { border-color: var(--ink); }
+    .btn-save {
+      padding: 7px 15px; background: var(--ink); color: var(--paper);
+      border: none; font-family: 'DM Mono', monospace;
+      font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+      border-radius: 2px; cursor: pointer; transition: opacity .14s;
+    }
+    .btn-save:hover { opacity: .75; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--ink); color: var(--paper);
+      font-family: 'DM Mono', monospace; font-size: .65rem; letter-spacing: .1em;
+      padding: 9px 18px; border-radius: 3px; border: 1px solid var(--accent);
+      z-index: 9999; transition: transform .3s; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Leaflet popup */
+    .cpopup .leaflet-popup-content-wrapper {
+      background: var(--paper); border: 2px solid var(--ink);
+      border-radius: 3px; box-shadow: 4px 4px 0 rgba(15,15,26,.2);
+      font-family: 'DM Mono', monospace; padding: 0;
+    }
+    .cpopup .leaflet-popup-tip { background: var(--ink); }
+    .cpopup .leaflet-popup-content { margin: 0; }
+    .pb { padding: 12px 14px; min-width: 175px; }
+    .pb-logo {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2px solid var(--ink); margin-bottom: 8px;
+      background: #e8e3d8; display: flex; align-items: center;
+      justify-content: center; font-size: 1rem; overflow: hidden;
+    }
+    .pb-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .pb-name { font-family: 'Playfair Display', serif; font-size: .9rem; margin-bottom: 3px; }
+    .pb-addr { font-size: .6rem; opacity: .45; margin-bottom: 6px; line-height: 1.4; }
+    .pb-note { font-size: .65rem; opacity: .7; margin-bottom: 7px; line-height: 1.5; }
+    .pb-btn {
+      font-family: 'DM Mono', monospace; font-size: .57rem;
+      letter-spacing: .08em; text-transform: uppercase;
+      background: var(--ink); color: var(--paper); border: none;
+      padding: 4px 8px; border-radius: 2px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-brand" href="index.html">Milan Startup Hub</a>
+    <div class="nav-links">
+      <a class="nav-link" href="index.html">Home</a>
+      <a class="nav-link active" href="startup-map.html">Startup Map</a>
+    </div>
+    <div id="geo-pill" class="loading">⏳ Geocoding…</div>
+  </nav>
+
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- Excel upload / merge -->
+      <div class="upload-section">
+        <div class="upload-section-header">
+          <h2>+ Import Excel</h2>
+          <button class="collapse-btn" id="collapse-btn" onclick="toggleUploadPanel()" title="Toggle">▲</button>
+        </div>
+        <div class="upload-panel" id="upload-panel">
+          <div class="excel-zone" id="excel-zone">
+            <div class="ez-icon">📊</div>
+            <div class="ez-text">Drop your .xlsx / .xls file here<br>or click to browse</div>
+            <div class="ez-hint">Col A = Name &nbsp;·&nbsp; Col B = Address</div>
+            <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="handleExcelUpload(this)"/>
+          </div>
+          <div class="merge-result" id="merge-result"></div>
+        </div>
+      </div>
+
+      <!-- Startups list -->
+      <div class="startups-header">
+        <h2>Startups</h2>
+        <span id="pin-count">(0)</span>
+      </div>
+      <div class="startups-hint">Click row → fly to pin &nbsp;·&nbsp; Edit → logo & details</div>
+      <div class="pins-list" id="pins-list"></div>
+    </div>
+
+    <!-- MAP -->
+    <div id="map"></div>
+  </div>
+
+  <!-- EDIT MODAL -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="modal-hdr">
+        <h3 id="m-title">Edit Startup</h3>
+        <button class="modal-x" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Logo + name block -->
+        <div class="logo-row">
+          <div class="logo-big" id="m-logo-wrap">
+            <span id="m-logo-emoji">🚀</span>
+            <img id="m-logo-img" alt="logo"/>
+            <button class="rm-logo" id="m-rm-logo" onclick="removeLogo()">✕</button>
+          </div>
+          <div class="logo-nm">
+            <strong id="m-name"></strong>
+            <small id="m-addr-display"></small>
+          </div>
+        </div>
+
+        <!-- Editable address -->
+        <div>
+          <label class="field-label">Address</label>
+          <input type="text" id="m-address" placeholder="Full street address…"/>
+          <div style="font-size:.56rem;opacity:.35;margin-top:4px;letter-spacing:.07em;text-transform:uppercase">
+            ⚠ Changing address will re-geocode the pin
+          </div>
+        </div>
+
+        <!-- Logo URL -->
+        <div>
+          <label class="field-label">Logo URL (direct image link)</label>
+          <input type="url" id="m-logo-url" placeholder="https://example.com/logo.png" oninput="previewUrl(this.value)"/>
+        </div>
+
+        <div class="or-div">or upload a file</div>
+
+        <!-- File upload -->
+        <div class="file-zone" id="file-zone">
+          <div class="fz-icon">🖼</div>
+          <div class="fz-txt">Click or drag & drop · PNG, JPG, SVG, WebP</div>
+          <input type="file" accept="image/*" id="m-logo-file" onchange="handleLogoFile(this)"/>
+        </div>
+
+        <!-- Notes -->
+        <div>
+          <label class="field-label">Notes (optional)</label>
+          <textarea id="m-notes" placeholder="Website, stage, description…" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-ftr">
+        <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn-save"  onclick="saveModal()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- SheetJS for Excel parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════
+  // STATE
+  // ═══════════════════════════════════════════════════════════════
+  const SEED = [
+    { id: 1, name: "Bending Spoons",  address: "VIA BONNET NINO, 10, 20154 MILANO (MI)" },
+    { id: 2, name: "Qomodo",          address: "VIA DELLA MOSCOVA, 18, 20121 MILANO (MI)" },
+    { id: 3, name: "Yellow Tech",     address: "Viale Cassala, 30, Milan, Lombardy 20143, IT" },
+  ];
+
+  let nextId = 100;
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem('msm2-state') || 'null'); } catch { return null; }
+  }
+  function saveState() {
+    localStorage.setItem('msm2-state', JSON.stringify(
+      startups.map(s => ({ id:s.id, name:s.name, address:s.address, logo:s.logo, notes:s.notes,
+                           lat:s.lat, lng:s.lng, geocodeOk:s.geocodeOk }))
+    ));
+  }
+
+  const saved = loadState();
+  const startups = saved ? saved.map(s => ({ ...s, marker: null }))
+                        : SEED.map(s => ({ ...s, lat:null, lng:null, geocodeOk:null, logo:null, notes:'', marker:null }));
+  if (startups.length) nextId = Math.max(...startups.map(s => s.id)) + 1;
+
+  // ═══════════════════════════════════════════════════════════════
+  // MAP
+  // ═══════════════════════════════════════════════════════════════
+  const map = L.map('map', { zoomControl: true }).setView([45.464, 9.19], 13);
+
+  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  });
+
+  // ESA Copernicus Sentinel-2 Cloudless tiles — https://maps.eox.at
+  const satLayer = L.tileLayer(
+    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg', {
+    attribution: 'Sentinel-2 cloudless © <a href="https://eox.at">EOX</a> · Modified <a href="https://sentinel.esa.int">Copernicus Sentinel data 2021</a>',
+    maxZoom: 18
+  });
+
+  const lblLayer = L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://carto.com/attributions">CARTO</a>', opacity: 0.85
+  });
+
+  osmLayer.addTo(map);
+
+  function setLayer(m) {
+    ['osm','sat','hyb'].forEach(k =>
+      document.getElementById('btn-' + k).classList.toggle('active', k === m.replace('satellite','sat').replace('hybrid','hyb'))
+    );
+    map.removeLayer(osmLayer); map.removeLayer(satLayer); map.removeLayer(lblLayer);
+    if (m==='osm') osmLayer.addTo(map);
+    else if (m==='satellite') satLayer.addTo(map);
+    else { satLayer.addTo(map); lblLayer.addTo(map); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GEOCODING
+  // ═══════════════════════════════════════════════════════════════
+  async function geocodeOne(s) {
+    const q = encodeURIComponent(s.address);
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`, {
+        headers: { 'Accept-Language': 'en' }
+      });
+      const d = await r.json();
+      if (d.length) { s.lat = +d[0].lat; s.lng = +d[0].lon; s.geocodeOk = true; }
+      else s.geocodeOk = false;
+    } catch { s.geocodeOk = false; }
+  }
+
+  async function geocodeList(list, onEach) {
+    for (let i = 0; i < list.length; i++) {
+      if (i > 0) await sleep(1100);
+      await geocodeOne(list[i]);
+      if (onEach) onEach(list[i]);
+    }
+  }
+
+  async function bootGeocode() {
+    setGeoPill('loading', '⏳ Geocoding…');
+    const needGeo = startups.filter(s => s.geocodeOk === null || s.geocodeOk === undefined);
+    // render already-located ones immediately
+    startups.filter(s => s.geocodeOk === true).forEach(addMarker);
+    renderList();
+    if (needGeo.length) {
+      await geocodeList(needGeo, s => { addMarker(s); renderList(); saveState(); });
+    }
+    const bounds = startups.filter(s => s.geocodeOk).map(s => [s.lat, s.lng]);
+    if (bounds.length) map.fitBounds(bounds, { padding: [60,60] });
+    const failed = startups.filter(s => !s.geocodeOk);
+    setGeoPill(failed.length ? 'error' : 'done',
+               failed.length ? `⚠ ${failed.length} not found` : `✓ ${startups.length} located`);
+    renderList(); saveState();
+  }
+
+  function setGeoPill(cls, txt) {
+    const el = document.getElementById('geo-pill');
+    el.className = cls; el.textContent = txt;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MARKERS
+  // ═══════════════════════════════════════════════════════════════
+  function makeIcon(s) {
+    const logoHtml = s.logo
+      ? `<img src="${esc(s.logo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"
+             onerror="this.style.display='none';this.nextSibling.style.display='flex'"/>
+         <span style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:12px">🚀</span>`
+      : `<span style="display:flex;position:absolute;inset:0;align-items:center;justify-content:center;font-size:12px">🚀</span>`;
+
+    const color = s.geocodeOk === false ? '#b5451b' : '#0f0f1a';
+    return L.divIcon({
+      html: `<div style="position:relative;width:38px;height:38px">
+        <div style="width:38px;height:38px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+                    background:${color};border:2.5px solid #f5f1e8;
+                    box-shadow:2px 3px 8px rgba(0,0,0,.45);overflow:hidden;
+                    display:flex;align-items:center;justify-content:center;">
+          <div style="transform:rotate(45deg);width:28px;height:28px;overflow:hidden;border-radius:50%;position:relative">
+            ${logoHtml}
+          </div>
+        </div>
+      </div>`,
+      className: '', iconSize: [38,38], iconAnchor: [10,38], popupAnchor: [9,-40]
+    });
+  }
+
+  function addMarker(s) {
+    if (s.marker) { map.removeLayer(s.marker); s.marker = null; }
+    if (!s.geocodeOk) return;
+    s.marker = L.marker([s.lat, s.lng], { icon: makeIcon(s) }).addTo(map);
+    s.marker.bindPopup(() => buildPopup(s), { className: 'cpopup', maxWidth: 240 });
+  }
+
+  function refreshMarker(s) {
+    if (!s.geocodeOk) { if (s.marker) { map.removeLayer(s.marker); s.marker = null; } return; }
+    if (!s.marker) { addMarker(s); return; }
+    s.marker.setIcon(makeIcon(s));
+    s.marker.setPopupContent(buildPopup(s));
+  }
+
+  function buildPopup(s) {
+    const logoH = s.logo
+      ? `<div class="pb-logo"><img src="${esc(s.logo)}" onerror="this.style.display='none'"/></div>`
+      : `<div class="pb-logo">🚀</div>`;
+    return `<div class="pb">
+      ${logoH}
+      <div class="pb-name">${esc(s.name)}</div>
+      <div class="pb-addr">${esc(s.address)}</div>
+      ${s.notes ? `<div class="pb-note">${esc(s.notes)}</div>` : ''}
+      <button class="pb-btn" onclick="openModal(${s.id})">✏ Edit / Logo</button>
+    </div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SIDEBAR LIST
+  // ═══════════════════════════════════════════════════════════════
+  function renderList() {
+    document.getElementById('pin-count').textContent = `(${startups.length})`;
+    document.getElementById('pins-list').innerHTML = startups.map(s => {
+      const bc = s.geocodeOk === null || s.geocodeOk === undefined ? 'badge-wait'
+               : s.geocodeOk ? 'badge-ok' : 'badge-fail';
+      const bt = s.geocodeOk === null || s.geocodeOk === undefined ? 'Pending'
+               : s.geocodeOk ? 'Located' : 'Not found';
+      const thumb = s.logo
+        ? `<div class="pin-logo-thumb"><img src="${esc(s.logo)}" onerror="this.innerHTML='🚀'"/></div>`
+        : `<div class="pin-logo-thumb">🚀</div>`;
+      return `<div class="pin-item" id="row-${s.id}" onclick="flyTo(${s.id})">
+        ${thumb}
+        <div class="pin-info">
+          <div class="pin-name">${esc(s.name)}</div>
+          <div class="pin-addr">${esc(s.address)}</div>
+        </div>
+        <span class="badge ${bc}">${bt}</span>
+        <button class="edit-btn" onclick="event.stopPropagation();openModal(${s.id})">Edit</button>
+      </div>`;
+    }).join('');
+  }
+
+  function flyTo(id) {
+    const s = startups.find(x => x.id === id);
+    document.querySelectorAll('.pin-item').forEach(el => el.classList.remove('selected'));
+    document.getElementById('row-' + id)?.classList.add('selected');
+    if (!s?.marker) { toast(`⚠ "${s?.name}" not yet located`); return; }
+    map.flyTo([s.lat, s.lng], 16, { duration: .9 });
+    setTimeout(() => s.marker?.openPopup(), 950);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EDIT MODAL
+  // ═══════════════════════════════════════════════════════════════
+  let editId = null, pendingDataUrl = null;
+
+  function openModal(id) {
+    editId = id; pendingDataUrl = null;
+    const s = startups.find(x => x.id === id);
+    document.getElementById('m-title').textContent = `Edit — ${s.name}`;
+    document.getElementById('m-name').textContent = s.name;
+    document.getElementById('m-addr-display').textContent = s.address;
+    document.getElementById('m-address').value = s.address;
+    document.getElementById('m-logo-url').value = s.logo || '';
+    document.getElementById('m-logo-file').value = '';
+    document.getElementById('m-notes').value = s.notes || '';
+    setLogoPreview(s.logo);
+    document.getElementById('overlay').classList.add('open');
+    map.closePopup();
+  }
+
+  function closeModal() {
+    document.getElementById('overlay').classList.remove('open');
+    editId = null; pendingDataUrl = null;
+  }
+
+  function setLogoPreview(src) {
+    const img   = document.getElementById('m-logo-img');
+    const emoji = document.getElementById('m-logo-emoji');
+    const rm    = document.getElementById('m-rm-logo');
+    if (src) {
+      img.src = src; img.style.display = 'block';
+      emoji.style.display = 'none'; rm.style.display = 'flex';
+    } else {
+      img.src = ''; img.style.display = 'none';
+      emoji.style.display = ''; rm.style.display = 'none';
+    }
+  }
+
+  function previewUrl(url) { pendingDataUrl = null; setLogoPreview(url || null); }
+
+  function handleLogoFile(inp) {
+    if (!inp.files?.[0]) return;
+    const r = new FileReader();
+    r.onload = e => {
+      pendingDataUrl = e.target.result;
+      document.getElementById('m-logo-url').value = '';
+      setLogoPreview(pendingDataUrl);
+    };
+    r.readAsDataURL(inp.files[0]);
+  }
+
+  function removeLogo() {
+    pendingDataUrl = null;
+    document.getElementById('m-logo-url').value = '';
+    setLogoPreview(null);
+  }
+
+  async function saveModal() {
+    const s = startups.find(x => x.id === editId);
+    if (!s) return;
+
+    const newAddr  = document.getElementById('m-address').value.trim();
+    const logoUrl  = document.getElementById('m-logo-url').value.trim();
+    const newNotes = document.getElementById('m-notes').value.trim();
+
+    s.logo  = pendingDataUrl || logoUrl || null;
+    s.notes = newNotes;
+
+    // Address changed? Re-geocode
+    if (newAddr && newAddr !== s.address) {
+      s.address = newAddr;
+      s.geocodeOk = null;
+      document.getElementById('m-addr-display').textContent = newAddr;
+      closeModal();
+      renderList(); saveState();
+      toast(`🔄 Re-geocoding "${s.name}"…`);
+      await geocodeOne(s);
+      addMarker(s);
+      if (s.geocodeOk) {
+        map.flyTo([s.lat, s.lng], 15, { duration: .9 });
+        toast(`✓ "${s.name}" moved to new address`);
+      } else {
+        toast(`⚠ Could not locate new address for "${s.name}"`);
+      }
+    } else {
+      refreshMarker(s);
+      closeModal();
+      toast(`✓ "${s.name}" updated`);
+    }
+
+    renderList(); saveState();
+  }
+
+  // drag on file zone
+  const fzone = document.getElementById('file-zone');
+  fzone.addEventListener('dragover', e => { e.preventDefault(); fzone.classList.add('drag'); });
+  fzone.addEventListener('dragleave', () => fzone.classList.remove('drag'));
+  fzone.addEventListener('drop', e => {
+    e.preventDefault(); fzone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f?.type.startsWith('image/')) {
+      const r = new FileReader();
+      r.onload = ev => { pendingDataUrl = ev.target.result; document.getElementById('m-logo-url').value = ''; setLogoPreview(pendingDataUrl); };
+      r.readAsDataURL(f);
+    }
+  });
+  document.getElementById('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+
+  // ═══════════════════════════════════════════════════════════════
+  // EXCEL IMPORT + SMART MERGE
+  // ═══════════════════════════════════════════════════════════════
+  function handleExcelUpload(inp) {
+    if (!inp.files?.[0]) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+        // skip header row if first cell looks like a label
+        const dataRows = rows.filter((r, i) => {
+          if (i === 0) {
+            const c = String(r[0]||'').toLowerCase();
+            if (c.includes('name') || c.includes('startup') || c === 'n°' || c === 'n' || c === '#') return false;
+          }
+          return r[0] && r[1]; // must have name and address
+        });
+
+        if (!dataRows.length) {
+          showMerge('warn', '⚠ No valid rows found. Ensure Col A = Name, Col B = Address.');
+          return;
+        }
+
+        let added = 0, updated = 0, unchanged = 0;
+        const toGeocode = [];
+
+        for (const row of dataRows) {
+          const rawName = String(row[0]).trim();
+          const rawAddr = String(row[1]).trim();
+          if (!rawName || !rawAddr) continue;
+
+          // find existing by name (case-insensitive)
+          const existing = startups.find(s => s.name.toLowerCase() === rawName.toLowerCase());
+
+          if (existing) {
+            // address changed?
+            if (existing.address.toLowerCase().trim() !== rawAddr.toLowerCase().trim()) {
+              existing.address = rawAddr;
+              existing.geocodeOk = null;
+              if (existing.marker) { map.removeLayer(existing.marker); existing.marker = null; }
+              toGeocode.push(existing);
+              updated++;
+            } else {
+              unchanged++;
+            }
+          } else {
+            // new startup
+            const s = {
+              id: nextId++, name: rawName, address: rawAddr,
+              lat: null, lng: null, geocodeOk: null,
+              logo: null, notes: '', marker: null
+            };
+            startups.push(s);
+            toGeocode.push(s);
+            added++;
+          }
+        }
+
+        renderList(); saveState();
+
+        const parts = [];
+        if (added)     parts.push(`${added} new`);
+        if (updated)   parts.push(`${updated} updated`);
+        if (unchanged) parts.push(`${unchanged} unchanged`);
+        showMerge('info', `✓ ${parts.join(' · ')} — geocoding new positions…`);
+        inp.value = '';
+
+        if (toGeocode.length) {
+          setGeoPill('loading', '⏳ Geocoding…');
+          await geocodeList(toGeocode, s => { addMarker(s); renderList(); saveState(); });
+          const failed = startups.filter(s => !s.geocodeOk);
+          setGeoPill(failed.length ? 'error' : 'done',
+                     failed.length ? `⚠ ${failed.length} not found` : `✓ ${startups.length} located`);
+          renderList(); saveState();
+          showMerge('info', `✓ Import complete · ${parts.join(' · ')}`);
+          const bounds = startups.filter(s => s.geocodeOk).map(s => [s.lat, s.lng]);
+          if (bounds.length) map.fitBounds(bounds, { padding: [60,60] });
+        }
+
+      } catch(err) {
+        showMerge('warn', `⚠ Could not read file: ${err.message}`);
+      }
+    };
+    reader.readAsArrayBuffer(inp.files[0]);
+  }
+
+  function showMerge(type, msg) {
+    const el = document.getElementById('merge-result');
+    el.className = `merge-result show ${type}`;
+    el.textContent = msg;
+  }
+
+  // Excel drop zone
+  const ez = document.getElementById('excel-zone');
+  ez.addEventListener('dragover', e => { e.preventDefault(); ez.classList.add('drag'); });
+  ez.addEventListener('dragleave', () => ez.classList.remove('drag'));
+  ez.addEventListener('drop', e => {
+    e.preventDefault(); ez.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) { const fakeInp = { files: [f] }; handleExcelUpload(fakeInp); }
+  });
+
+  // collapse upload panel
+  function toggleUploadPanel() {
+    const panel = document.getElementById('upload-panel');
+    const btn   = document.getElementById('collapse-btn');
+    panel.classList.toggle('collapsed');
+    btn.textContent = panel.classList.contains('collapsed') ? '▼' : '▲';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UTILS
+  // ═══════════════════════════════════════════════════════════════
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  let toastT;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+  renderList();
+  bootGeocode();
+  </script>
+
+</body>
+</html>
