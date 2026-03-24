@@ -98,7 +98,7 @@
     .layer-btn:hover:not(.active) { background: var(--ink); color: var(--paper); opacity: .6; }
 
     /* upload section */
-    .upload-section { padding: 11px 15px; border-bottom: 1px solid var(--border); }
+    .upload-section { padding: 11px 15px; border-bottom: 1px solid var(--border); display: none; }
     .upload-section-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 8px;
@@ -893,6 +893,21 @@
   // ═══════════════════════════════════════════════════════════════
   renderList();
   bootGeocode();
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN UNLOCK  (Ctrl + Shift + A)
+  // ═══════════════════════════════════════════════════════════════
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      const pw = prompt('Admin password:');
+      if (pw === 'excelimport8895@milanMAP') {
+        document.querySelector('.upload-section').style.display = 'block';
+        toast('✓ Admin mode unlocked');
+      } else if (pw !== null) {
+        toast('✗ Wrong password');
+      }
+    }
+  });
   </script>
 
 </body>
