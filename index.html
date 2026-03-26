@@ -97,53 +97,6 @@
     .layer-btn.active { background: var(--ink); color: var(--paper); }
     .layer-btn:hover:not(.active) { background: var(--ink); color: var(--paper); opacity: .6; }
 
-    /* upload section */
-    .upload-section { padding: 11px 15px; border-bottom: 1px solid var(--border); display: none; }
-    .upload-section-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 8px;
-    }
-    .upload-section-header h2 {
-      font-family: 'Playfair Display', serif; font-size: .8rem; letter-spacing: .03em;
-    }
-    .upload-count {
-      font-size: .58rem; opacity: .4; letter-spacing: .08em; text-transform: uppercase;
-    }
-
-    /* collapse toggle */
-    .collapse-btn {
-      background: none; border: none; cursor: pointer;
-      font-size: .75rem; opacity: .4; transition: opacity .15s; padding: 2px 4px;
-    }
-    .collapse-btn:hover { opacity: .9; }
-
-    .upload-panel { overflow: hidden; transition: max-height .3s ease; max-height: 200px; }
-    .upload-panel.collapsed { max-height: 0; }
-
-    /* excel drop zone */
-    .excel-zone {
-      border: 1.5px dashed var(--border); border-radius: 3px;
-      padding: 12px 10px; text-align: center; cursor: pointer;
-      transition: all .15s; position: relative; background: #faf7f0;
-    }
-    .excel-zone:hover, .excel-zone.drag { border-color: var(--ink); background: rgba(15,15,26,.04); }
-    .excel-zone input[type=file] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-    }
-    .excel-zone .ez-icon { font-size: 1.3rem; margin-bottom: 3px; }
-    .excel-zone .ez-text  { font-size: .59rem; letter-spacing: .07em; text-transform: uppercase; opacity: .45; line-height: 1.5; }
-    .excel-zone .ez-hint  { font-size: .55rem; opacity: .3; margin-top: 3px; letter-spacing: .05em; }
-
-    /* merge result badge */
-    .merge-result {
-      margin-top: 7px; padding: 6px 10px; border-radius: 2px;
-      font-size: .6rem; letter-spacing: .07em; text-transform: uppercase;
-      display: none; line-height: 1.6;
-    }
-    .merge-result.show { display: block; }
-    .merge-result.info { background: rgba(46,125,84,.1); color: #1a5c35; border: 1px solid rgba(46,125,84,.3); }
-    .merge-result.warn { background: rgba(181,69,27,.08); color: var(--danger); border: 1px solid rgba(181,69,27,.25); }
-
     /* startups header */
     .startups-header {
       padding: 11px 15px 7px;
@@ -354,10 +307,9 @@
   <nav>
     <a class="nav-brand" href="index.html">Milan Startup Hub</a>
     <div class="nav-links">
-      <a class="nav-link" href="index.html">Home</a>
-      <a class="nav-link active" href="startup-map.html">Startup Map</a>
+      <a class="nav-link active" href="index.html">Startup Map</a>
     </div>
-    <div id="geo-pill" class="loading">⏳ Geocoding…</div>
+    <div id="geo-pill" class="loading">⏳ Loading…</div>
   </nav>
 
   <div class="app">
@@ -365,20 +317,13 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
 
-      <!-- Excel upload / merge -->
-      <div class="upload-section">
-        <div class="upload-section-header">
-          <h2>+ Import Excel</h2>
-          <button class="collapse-btn" id="collapse-btn" onclick="toggleUploadPanel()" title="Toggle">▲</button>
-        </div>
-        <div class="upload-panel" id="upload-panel">
-          <div class="excel-zone" id="excel-zone">
-            <div class="ez-icon">📊</div>
-            <div class="ez-text">Drop your .xlsx / .xls file here<br>or click to browse</div>
-            <div class="ez-hint">Col A = Name &nbsp;·&nbsp; Col B = Address</div>
-            <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="handleExcelUpload(this)"/>
-          </div>
-          <div class="merge-result" id="merge-result"></div>
+      <!-- Map layer selector -->
+      <div class="sb-section">
+        <h2>Map Layer</h2>
+        <div class="layer-btns">
+          <button class="layer-btn active" id="btn-osm" onclick="setLayer('osm')">Street</button>
+          <button class="layer-btn" id="btn-sat" onclick="setLayer('satellite')">Satellite</button>
+          <button class="layer-btn" id="btn-hyb" onclick="setLayer('hybrid')">Hybrid</button>
         </div>
       </div>
 
@@ -387,7 +332,7 @@
         <h2>Startups</h2>
         <span id="pin-count">(0)</span>
       </div>
-      <div class="startups-hint">Click row → fly to pin &nbsp;·&nbsp; Edit → logo & details</div>
+      <div class="startups-hint">Click row → fly to pin &nbsp;·&nbsp; Edit → logo & notes</div>
       <div class="pins-list" id="pins-list"></div>
     </div>
 
@@ -414,15 +359,6 @@
           <div class="logo-nm">
             <strong id="m-name"></strong>
             <small id="m-addr-display"></small>
-          </div>
-        </div>
-
-        <!-- Editable address -->
-        <div>
-          <label class="field-label">Address</label>
-          <input type="text" id="m-address" placeholder="Full street address…"/>
-          <div style="font-size:.56rem;opacity:.35;margin-top:4px;letter-spacing:.07em;text-transform:uppercase">
-            ⚠ Changing address will re-geocode the pin
           </div>
         </div>
 
@@ -456,36 +392,50 @@
 
   <div id="toast"></div>
 
-  <!-- SheetJS for Excel parsing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
   // ═══════════════════════════════════════════════════════════════
+  // CONFIG
+  // ═══════════════════════════════════════════════════════════════
+  const GITHUB_RAW = 'https://raw.githubusercontent.com/elenagetici01/milan-startup-map/main/startups.json';
+
+  // ═══════════════════════════════════════════════════════════════
   // STATE
   // ═══════════════════════════════════════════════════════════════
-  const SEED = [
-    { id: 1, name: "Bending Spoons",  address: "VIA BONNET NINO, 10, 20154 MILANO (MI)" },
-    { id: 2, name: "Qomodo",          address: "VIA DELLA MOSCOVA, 18, 20121 MILANO (MI)" },
-    { id: 3, name: "Yellow Tech",     address: "Viale Cassala, 30, Milan, Lombardy 20143, IT" },
-  ];
+  let startups = [];
+  let nextId   = 1;
 
-  let nextId = 100;
-
-  function loadState() {
-    try { return JSON.parse(localStorage.getItem('msm2-state') || 'null'); } catch { return null; }
+  // Local overrides: logo + notes keyed by startup id (persisted in localStorage)
+  function loadOverrides() {
+    try { return JSON.parse(localStorage.getItem('msm-overrides') || '{}'); } catch { return {}; }
   }
-  function saveState() {
-    localStorage.setItem('msm2-state', JSON.stringify(
-      startups.map(s => ({ id:s.id, name:s.name, address:s.address, logo:s.logo, notes:s.notes,
-                           lat:s.lat, lng:s.lng, geocodeOk:s.geocodeOk }))
-    ));
+  function saveOverride(id, logo, notes) {
+    const ov = loadOverrides();
+    ov[String(id)] = { logo, notes };
+    localStorage.setItem('msm-overrides', JSON.stringify(ov));
   }
 
-  const saved = loadState();
-  const startups = saved ? saved.map(s => ({ ...s, marker: null }))
-                        : SEED.map(s => ({ ...s, lat:null, lng:null, geocodeOk:null, logo:null, notes:'', marker:null }));
-  if (startups.length) nextId = Math.max(...startups.map(s => s.id)) + 1;
+  async function loadStartups() {
+    setGeoPill('loading', '⏳ Loading…');
+    try {
+      const r    = await fetch(GITHUB_RAW + '?t=' + Date.now());
+      const data = await r.json();
+      const ov   = loadOverrides();
+      startups   = data.map(s => ({
+        ...s,
+        geocodeOk: (s.lat != null && s.lng != null) ? true : null,
+        logo:   ov[String(s.id)]?.logo  ?? s.logo  ?? null,
+        notes:  ov[String(s.id)]?.notes ?? s.notes ?? '',
+        marker: null
+      }));
+      if (startups.length) nextId = Math.max(...startups.map(s => s.id)) + 1;
+    } catch (e) {
+      console.error('Failed to load startups.json:', e);
+      setGeoPill('error', '⚠ Load failed');
+      startups = [];
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // MAP
@@ -497,7 +447,6 @@
     maxZoom: 19
   });
 
-  // ESA Copernicus Sentinel-2 Cloudless tiles — https://maps.eox.at
   const satLayer = L.tileLayer(
     'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg', {
     attribution: 'Sentinel-2 cloudless © <a href="https://eox.at">EOX</a> · Modified <a href="https://sentinel.esa.int">Copernicus Sentinel data 2021</a>',
@@ -522,7 +471,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GEOCODING
+  // GEOCODING  (client-side fallback for entries without coordinates)
   // ═══════════════════════════════════════════════════════════════
   async function geocodeOne(s) {
     const q = encodeURIComponent(s.address);
@@ -545,20 +494,20 @@
   }
 
   async function bootGeocode() {
-    setGeoPill('loading', '⏳ Geocoding…');
-    const needGeo = startups.filter(s => s.geocodeOk === null || s.geocodeOk === undefined);
+    const needGeo = startups.filter(s => s.geocodeOk === null);
     // render already-located ones immediately
     startups.filter(s => s.geocodeOk === true).forEach(addMarker);
     renderList();
     if (needGeo.length) {
-      await geocodeList(needGeo, s => { addMarker(s); renderList(); saveState(); });
+      setGeoPill('loading', '⏳ Geocoding…');
+      await geocodeList(needGeo, s => { addMarker(s); renderList(); });
     }
     const bounds = startups.filter(s => s.geocodeOk).map(s => [s.lat, s.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding: [60,60] });
-    const failed = startups.filter(s => !s.geocodeOk);
+    const failed = startups.filter(s => s.geocodeOk === false);
     setGeoPill(failed.length ? 'error' : 'done',
                failed.length ? `⚠ ${failed.length} not found` : `✓ ${startups.length} located`);
-    renderList(); saveState();
+    renderList();
   }
 
   function setGeoPill(cls, txt) {
@@ -625,9 +574,9 @@
   function renderList() {
     document.getElementById('pin-count').textContent = `(${startups.length})`;
     document.getElementById('pins-list').innerHTML = startups.map(s => {
-      const bc = s.geocodeOk === null || s.geocodeOk === undefined ? 'badge-wait'
+      const bc = s.geocodeOk === null ? 'badge-wait'
                : s.geocodeOk ? 'badge-ok' : 'badge-fail';
-      const bt = s.geocodeOk === null || s.geocodeOk === undefined ? 'Pending'
+      const bt = s.geocodeOk === null ? 'Pending'
                : s.geocodeOk ? 'Located' : 'Not found';
       const thumb = s.logo
         ? `<div class="pin-logo-thumb"><img src="${esc(s.logo)}" onerror="this.innerHTML='🚀'"/></div>`
@@ -654,7 +603,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // EDIT MODAL
+  // EDIT MODAL  (logo + notes only — saved to localStorage)
   // ═══════════════════════════════════════════════════════════════
   let editId = null, pendingDataUrl = null;
 
@@ -664,7 +613,6 @@
     document.getElementById('m-title').textContent = `Edit — ${s.name}`;
     document.getElementById('m-name').textContent = s.name;
     document.getElementById('m-addr-display').textContent = s.address;
-    document.getElementById('m-address').value = s.address;
     document.getElementById('m-logo-url').value = s.logo || '';
     document.getElementById('m-logo-file').value = '';
     document.getElementById('m-notes').value = s.notes || '';
@@ -710,40 +658,21 @@
     setLogoPreview(null);
   }
 
-  async function saveModal() {
+  function saveModal() {
     const s = startups.find(x => x.id === editId);
     if (!s) return;
 
-    const newAddr  = document.getElementById('m-address').value.trim();
     const logoUrl  = document.getElementById('m-logo-url').value.trim();
     const newNotes = document.getElementById('m-notes').value.trim();
 
     s.logo  = pendingDataUrl || logoUrl || null;
     s.notes = newNotes;
 
-    // Address changed? Re-geocode
-    if (newAddr && newAddr !== s.address) {
-      s.address = newAddr;
-      s.geocodeOk = null;
-      document.getElementById('m-addr-display').textContent = newAddr;
-      closeModal();
-      renderList(); saveState();
-      toast(`🔄 Re-geocoding "${s.name}"…`);
-      await geocodeOne(s);
-      addMarker(s);
-      if (s.geocodeOk) {
-        map.flyTo([s.lat, s.lng], 15, { duration: .9 });
-        toast(`✓ "${s.name}" moved to new address`);
-      } else {
-        toast(`⚠ Could not locate new address for "${s.name}"`);
-      }
-    } else {
-      refreshMarker(s);
-      closeModal();
-      toast(`✓ "${s.name}" updated`);
-    }
-
-    renderList(); saveState();
+    saveOverride(s.id, s.logo, s.notes);
+    refreshMarker(s);
+    closeModal();
+    renderList();
+    toast(`✓ "${s.name}" updated`);
   }
 
   // drag on file zone
@@ -760,119 +689,6 @@
     }
   });
   document.getElementById('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
-
-  // ═══════════════════════════════════════════════════════════════
-  // EXCEL IMPORT + SMART MERGE
-  // ═══════════════════════════════════════════════════════════════
-  function handleExcelUpload(inp) {
-    if (!inp.files?.[0]) return;
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        const wb   = XLSX.read(e.target.result, { type: 'array' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-        // skip header row if first cell looks like a label
-        const dataRows = rows.filter((r, i) => {
-          if (i === 0) {
-            const c = String(r[0]||'').toLowerCase();
-            if (c.includes('name') || c.includes('startup') || c === 'n°' || c === 'n' || c === '#') return false;
-          }
-          return r[0] && r[1]; // must have name and address
-        });
-
-        if (!dataRows.length) {
-          showMerge('warn', '⚠ No valid rows found. Ensure Col A = Name, Col B = Address.');
-          return;
-        }
-
-        let added = 0, updated = 0, unchanged = 0;
-        const toGeocode = [];
-
-        for (const row of dataRows) {
-          const rawName = String(row[0]).trim();
-          const rawAddr = String(row[1]).trim();
-          if (!rawName || !rawAddr) continue;
-
-          // find existing by name (case-insensitive)
-          const existing = startups.find(s => s.name.toLowerCase() === rawName.toLowerCase());
-
-          if (existing) {
-            // address changed?
-            if (existing.address.toLowerCase().trim() !== rawAddr.toLowerCase().trim()) {
-              existing.address = rawAddr;
-              existing.geocodeOk = null;
-              if (existing.marker) { map.removeLayer(existing.marker); existing.marker = null; }
-              toGeocode.push(existing);
-              updated++;
-            } else {
-              unchanged++;
-            }
-          } else {
-            // new startup
-            const s = {
-              id: nextId++, name: rawName, address: rawAddr,
-              lat: null, lng: null, geocodeOk: null,
-              logo: null, notes: '', marker: null
-            };
-            startups.push(s);
-            toGeocode.push(s);
-            added++;
-          }
-        }
-
-        renderList(); saveState();
-
-        const parts = [];
-        if (added)     parts.push(`${added} new`);
-        if (updated)   parts.push(`${updated} updated`);
-        if (unchanged) parts.push(`${unchanged} unchanged`);
-        showMerge('info', `✓ ${parts.join(' · ')} — geocoding new positions…`);
-        inp.value = '';
-
-        if (toGeocode.length) {
-          setGeoPill('loading', '⏳ Geocoding…');
-          await geocodeList(toGeocode, s => { addMarker(s); renderList(); saveState(); });
-          const failed = startups.filter(s => !s.geocodeOk);
-          setGeoPill(failed.length ? 'error' : 'done',
-                     failed.length ? `⚠ ${failed.length} not found` : `✓ ${startups.length} located`);
-          renderList(); saveState();
-          showMerge('info', `✓ Import complete · ${parts.join(' · ')}`);
-          const bounds = startups.filter(s => s.geocodeOk).map(s => [s.lat, s.lng]);
-          if (bounds.length) map.fitBounds(bounds, { padding: [60,60] });
-        }
-
-      } catch(err) {
-        showMerge('warn', `⚠ Could not read file: ${err.message}`);
-      }
-    };
-    reader.readAsArrayBuffer(inp.files[0]);
-  }
-
-  function showMerge(type, msg) {
-    const el = document.getElementById('merge-result');
-    el.className = `merge-result show ${type}`;
-    el.textContent = msg;
-  }
-
-  // Excel drop zone
-  const ez = document.getElementById('excel-zone');
-  ez.addEventListener('dragover', e => { e.preventDefault(); ez.classList.add('drag'); });
-  ez.addEventListener('dragleave', () => ez.classList.remove('drag'));
-  ez.addEventListener('drop', e => {
-    e.preventDefault(); ez.classList.remove('drag');
-    const f = e.dataTransfer.files[0];
-    if (f) { const fakeInp = { files: [f] }; handleExcelUpload(fakeInp); }
-  });
-
-  // collapse upload panel
-  function toggleUploadPanel() {
-    const panel = document.getElementById('upload-panel');
-    const btn   = document.getElementById('collapse-btn');
-    panel.classList.toggle('collapsed');
-    btn.textContent = panel.classList.contains('collapsed') ? '▼' : '▲';
-  }
 
   // ═══════════════════════════════════════════════════════════════
   // UTILS
@@ -892,22 +708,7 @@
   // BOOT
   // ═══════════════════════════════════════════════════════════════
   renderList();
-  bootGeocode();
-
-  // ═══════════════════════════════════════════════════════════════
-  // ADMIN UNLOCK  (Ctrl + Shift + A)
-  // ═══════════════════════════════════════════════════════════════
-  document.addEventListener('keydown', e => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-      const pw = prompt('Admin password:');
-      if (pw === 'excelimport8895@milanMAP') {
-        document.querySelector('.upload-section').style.display = 'block';
-        toast('✓ Admin mode unlocked');
-      } else if (pw !== null) {
-        toast('✗ Wrong password');
-      }
-    }
-  });
+  loadStartups().then(() => bootGeocode());
   </script>
 
 </body>
