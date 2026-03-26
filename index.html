@@ -79,24 +79,6 @@
       overflow: hidden;
     }
 
-    /* layer section */
-    .sb-section { padding: 11px 15px; border-bottom: 1px solid var(--border); }
-    .sb-section h2 {
-      font-family: 'Playfair Display', serif; font-size: .8rem;
-      margin-bottom: 9px; letter-spacing: .03em;
-    }
-    .layer-btns { display: flex; gap: 5px; }
-    .layer-btn {
-      flex: 1; padding: 6px 4px;
-      font-family: 'DM Mono', monospace; font-size: .59rem;
-      letter-spacing: .08em; text-transform: uppercase;
-      border: 1.5px solid var(--ink); background: transparent;
-      cursor: pointer; transition: all .14s; border-radius: 2px;
-      color: var(--ink);
-    }
-    .layer-btn.active { background: var(--ink); color: var(--paper); }
-    .layer-btn:hover:not(.active) { background: var(--ink); color: var(--paper); opacity: .6; }
-
     /* startups header */
     .startups-header {
       padding: 11px 15px 7px;
@@ -137,14 +119,6 @@
     .pin-info { flex: 1; min-width: 0; }
     .pin-name { font-size: .7rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pin-addr { font-size: .57rem; opacity: .4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-
-    .badge {
-      font-size: .5rem; letter-spacing: .06em; text-transform: uppercase;
-      padding: 2px 5px; border-radius: 2px; flex-shrink: 0; white-space: nowrap;
-    }
-    .badge-ok   { background: rgba(76,175,125,.12); color: #1e6b40; border: 1px solid #4caf7d; }
-    .badge-fail { background: rgba(181,69,27,.1);   color: var(--danger); border: 1px solid var(--danger); }
-    .badge-wait { background: rgba(201,168,76,.15); color: #7a5c00; border: 1px solid var(--accent); }
 
     .edit-btn {
       background: none; border: 1.5px solid var(--ink); color: var(--ink);
@@ -215,7 +189,7 @@
       font-size: .58rem; letter-spacing: .1em; text-transform: uppercase;
       opacity: .5; display: block; margin-bottom: 4px;
     }
-    input[type=text], input[type=url], textarea {
+    input[type=text], input[type=url], input[type=password], textarea {
       width: 100%; padding: 7px 9px;
       font-family: 'DM Mono', monospace; font-size: .68rem;
       border: 1.5px solid var(--border); background: #faf7f0;
@@ -262,6 +236,7 @@
       border-radius: 2px; cursor: pointer; transition: opacity .14s;
     }
     .btn-save:hover { opacity: .75; }
+    .btn-save:disabled { opacity: .4; cursor: not-allowed; }
 
     /* ── TOAST ── */
     #toast {
@@ -309,7 +284,7 @@
     <div class="nav-links">
       <a class="nav-link active" href="index.html">Startup Map</a>
     </div>
-    <div id="geo-pill" class="loading">⏳ Loading…</div>
+    <div id="geo-pill" class="loading">Loading…</div>
   </nav>
 
   <div class="app">
@@ -317,22 +292,12 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
 
-      <!-- Map layer selector -->
-      <div class="sb-section">
-        <h2>Map Layer</h2>
-        <div class="layer-btns">
-          <button class="layer-btn active" id="btn-osm" onclick="setLayer('osm')">Street</button>
-          <button class="layer-btn" id="btn-sat" onclick="setLayer('satellite')">Satellite</button>
-          <button class="layer-btn" id="btn-hyb" onclick="setLayer('hybrid')">Hybrid</button>
-        </div>
-      </div>
-
       <!-- Startups list -->
       <div class="startups-header">
         <h2>Startups</h2>
         <span id="pin-count">(0)</span>
       </div>
-      <div class="startups-hint">Click row → fly to pin &nbsp;·&nbsp; Edit → logo & notes</div>
+      <div class="startups-hint">Click row → fly to pin &nbsp;·&nbsp; Edit → logo &amp; notes</div>
       <div class="pins-list" id="pins-list"></div>
     </div>
 
@@ -373,7 +338,7 @@
         <!-- File upload -->
         <div class="file-zone" id="file-zone">
           <div class="fz-icon">🖼</div>
-          <div class="fz-txt">Click or drag & drop · PNG, JPG, SVG, WebP</div>
+          <div class="fz-txt">Click or drag &amp; drop · PNG, JPG, SVG, WebP</div>
           <input type="file" accept="image/*" id="m-logo-file" onchange="handleLogoFile(this)"/>
         </div>
 
@@ -382,10 +347,17 @@
           <label class="field-label">Notes (optional)</label>
           <textarea id="m-notes" placeholder="Website, stage, description…" rows="3"></textarea>
         </div>
+
+        <!-- Edit password -->
+        <div>
+          <label class="field-label">Edit password</label>
+          <input type="password" id="m-secret" placeholder="Required to save for all users"/>
+        </div>
+
       </div>
       <div class="modal-ftr">
         <button class="btn-ghost" onclick="closeModal()">Cancel</button>
-        <button class="btn-save"  onclick="saveModal()">Save Changes</button>
+        <button class="btn-save" id="btn-save" onclick="saveModal()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -406,7 +378,7 @@
   let startups = [];
   let nextId   = 1;
 
-  // Local overrides: logo + notes keyed by startup id (persisted in localStorage)
+  // Local overrides: logo + notes keyed by startup id (fallback when API unavailable)
   function loadOverrides() {
     try { return JSON.parse(localStorage.getItem('msm-overrides') || '{}'); } catch { return {}; }
   }
@@ -415,9 +387,14 @@
     ov[String(id)] = { logo, notes };
     localStorage.setItem('msm-overrides', JSON.stringify(ov));
   }
+  function clearOverride(id) {
+    const ov = loadOverrides();
+    delete ov[String(id)];
+    localStorage.setItem('msm-overrides', JSON.stringify(ov));
+  }
 
   async function loadStartups() {
-    setGeoPill('loading', '⏳ Loading…');
+    setGeoPill('loading', 'Loading…');
     try {
       const r    = await fetch(GITHUB_RAW + '?t=' + Date.now());
       const data = await r.json();
@@ -442,33 +419,10 @@
   // ═══════════════════════════════════════════════════════════════
   const map = L.map('map', { zoomControl: true }).setView([45.464, 9.19], 13);
 
-  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
-  });
-
-  const satLayer = L.tileLayer(
-    'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg', {
-    attribution: 'Sentinel-2 cloudless © <a href="https://eox.at">EOX</a> · Modified <a href="https://sentinel.esa.int">Copernicus Sentinel data 2021</a>',
-    maxZoom: 18
-  });
-
-  const lblLayer = L.tileLayer(
-    'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-    attribution: '© <a href="https://carto.com/attributions">CARTO</a>', opacity: 0.85
-  });
-
-  osmLayer.addTo(map);
-
-  function setLayer(m) {
-    ['osm','sat','hyb'].forEach(k =>
-      document.getElementById('btn-' + k).classList.toggle('active', k === m.replace('satellite','sat').replace('hybrid','hyb'))
-    );
-    map.removeLayer(osmLayer); map.removeLayer(satLayer); map.removeLayer(lblLayer);
-    if (m==='osm') osmLayer.addTo(map);
-    else if (m==='satellite') satLayer.addTo(map);
-    else { satLayer.addTo(map); lblLayer.addTo(map); }
-  }
+  }).addTo(map);
 
   // ═══════════════════════════════════════════════════════════════
   // GEOCODING  (client-side fallback for entries without coordinates)
@@ -495,11 +449,10 @@
 
   async function bootGeocode() {
     const needGeo = startups.filter(s => s.geocodeOk === null);
-    // render already-located ones immediately
     startups.filter(s => s.geocodeOk === true).forEach(addMarker);
     renderList();
     if (needGeo.length) {
-      setGeoPill('loading', '⏳ Geocoding…');
+      setGeoPill('loading', 'Geocoding…');
       await geocodeList(needGeo, s => { addMarker(s); renderList(); });
     }
     const bounds = startups.filter(s => s.geocodeOk).map(s => [s.lat, s.lng]);
@@ -574,10 +527,6 @@
   function renderList() {
     document.getElementById('pin-count').textContent = `(${startups.length})`;
     document.getElementById('pins-list').innerHTML = startups.map(s => {
-      const bc = s.geocodeOk === null ? 'badge-wait'
-               : s.geocodeOk ? 'badge-ok' : 'badge-fail';
-      const bt = s.geocodeOk === null ? 'Pending'
-               : s.geocodeOk ? 'Located' : 'Not found';
       const thumb = s.logo
         ? `<div class="pin-logo-thumb"><img src="${esc(s.logo)}" onerror="this.innerHTML='🚀'"/></div>`
         : `<div class="pin-logo-thumb">🚀</div>`;
@@ -587,7 +536,6 @@
           <div class="pin-name">${esc(s.name)}</div>
           <div class="pin-addr">${esc(s.address)}</div>
         </div>
-        <span class="badge ${bc}">${bt}</span>
         <button class="edit-btn" onclick="event.stopPropagation();openModal(${s.id})">Edit</button>
       </div>`;
     }).join('');
@@ -603,7 +551,7 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // EDIT MODAL  (logo + notes only — saved to localStorage)
+  // EDIT MODAL
   // ═══════════════════════════════════════════════════════════════
   let editId = null, pendingDataUrl = null;
 
@@ -616,6 +564,7 @@
     document.getElementById('m-logo-url').value = s.logo || '';
     document.getElementById('m-logo-file').value = '';
     document.getElementById('m-notes').value = s.notes || '';
+    document.getElementById('m-secret').value = sessionStorage.getItem('msm-secret') || '';
     setLogoPreview(s.logo);
     document.getElementById('overlay').classList.add('open');
     map.closePopup();
@@ -658,21 +607,68 @@
     setLogoPreview(null);
   }
 
-  function saveModal() {
+  async function saveModal() {
     const s = startups.find(x => x.id === editId);
     if (!s) return;
 
     const logoUrl  = document.getElementById('m-logo-url').value.trim();
     const newNotes = document.getElementById('m-notes').value.trim();
+    const newLogo  = pendingDataUrl || logoUrl || null;
+    const secret   = document.getElementById('m-secret').value.trim();
 
-    s.logo  = pendingDataUrl || logoUrl || null;
-    s.notes = newNotes;
+    if (!secret) {
+      toast('⚠ Enter edit password to save');
+      document.getElementById('m-secret').focus();
+      return;
+    }
 
-    saveOverride(s.id, s.logo, s.notes);
-    refreshMarker(s);
-    closeModal();
-    renderList();
-    toast(`✓ "${s.name}" updated`);
+    const btn = document.getElementById('btn-save');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      const r = await fetch('/api/update-startup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Edit-Secret': secret },
+        body: JSON.stringify({ id: s.id, logo: newLogo, notes: newNotes })
+      });
+
+      if (r.status === 401) {
+        sessionStorage.removeItem('msm-secret');
+        toast('⚠ Wrong password');
+        btn.disabled = false; btn.textContent = 'Save Changes';
+        return;
+      }
+
+      if (r.status === 429) {
+        toast('⚠ Too many attempts — try again in 15 min');
+        btn.disabled = false; btn.textContent = 'Save Changes';
+        return;
+      }
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      // Success — saved globally in startups.json
+      sessionStorage.setItem('msm-secret', secret);
+      clearOverride(s.id);  // JSON is now the source of truth
+      s.logo  = newLogo;
+      s.notes = newNotes;
+      refreshMarker(s);
+      closeModal();
+      renderList();
+      toast(`✓ "${s.name}" saved for all users`);
+
+    } catch (e) {
+      // API unavailable — fall back to localStorage
+      s.logo  = newLogo;
+      s.notes = newNotes;
+      saveOverride(s.id, s.logo, s.notes);
+      refreshMarker(s);
+      closeModal();
+      renderList();
+      toast(`✓ "${s.name}" saved locally (API unavailable)`);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Changes';
+    }
   }
 
   // drag on file zone
