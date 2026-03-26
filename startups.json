@@ -2,22 +2,29 @@
   {
     "id": 1,
     "name": "Bending Spoons",
-    "address": "VIA BONNET NINO, 10, 20154 MILANO (MI)",
+    "address": "Via Bonnet Nino, 10, 20154 Milano (MI)",
     "lat": 45.4826585,
     "lng": 9.1852885
   },
   {
     "id": 2,
     "name": "Qomodo",
-    "address": "VIA DELLA MOSCOVA, 18, 20121 MILANO (MI)",
+    "address": "Via Della Moscova, 18, 20121 Milano (MI)",
     "lat": 45.476242,
     "lng": 9.1927262
   },
   {
     "id": 3,
     "name": "Yellow Tech",
-    "address": "Viale Cassala, 30, Milan, Lombardy 20143, IT",
+    "address": "Viale Cassala, 30, 20143 Milano (MI)",
     "lat": 45.4443067,
     "lng": 9.1643497
+  },
+  {
+    "id": 4,
+    "name": "Pillar",
+    "address": "Piazza San Sepolcro, 1, 20123 Milano (MI)",
+    "lat": 45.4628325,
+    "lng": 9.1855216
   }
 ]
