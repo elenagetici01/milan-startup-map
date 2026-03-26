@@ -31,6 +31,10 @@ import os, sys, json, time, base64, argparse, requests, openpyxl
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# Forza UTF-8 su Windows (necessario per emoji nei print)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 # ── Configurazione ─────────────────────────────────────────────────────────────
 GITHUB_TOKEN  = os.environ.get('GITHUB_TOKEN', '')
 GITHUB_REPO   = os.environ.get('GITHUB_REPO', 'elenagetici01/milan-startup-map')
